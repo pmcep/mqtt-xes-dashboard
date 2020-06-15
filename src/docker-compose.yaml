@@ -1,0 +1,78 @@
+version: '3'
+services:
+  reverse-proxy:
+    image: traefik:v2.2.1
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443 
+      - --providers.docker=true
+      - --certificatesResolvers.le.acme.httpChallenge.entryPoint=web
+      - --certificatesresolvers.le.acme.email=martin.eigenmann@unisg.ch
+      - --certificatesresolvers.le.acme.storage=/acme.json
+      - --api.insecure=true
+      - --log.level=DEBUG
+    ports:
+      - "80:80"
+      - "8080:8080"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./acme.json:/acme.json
+    networks:
+      - monitoring
+      - default
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    #ports:
+            #- 3000:3000
+    volumes:
+      - grafana-volume:/var/lib/grafana
+    networks:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`mqttxes.ics.unisg.ch`)"
+      # - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.entryPoints=web,websecure"
+      # - "traefik.http.routers.grafana.tls.certresolver=le"
+    environment:
+            #- GF_SERVER_DOMAIN=mqttxes.ics.unisg.ch
+            #- GF_SERVER_ROOT_URL=https://mqttxes.ics.unisg.ch
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_METRICS_ENABLED=true
+      - GF_METRICS_BASIC_AUTH_USERNAME=admin
+      - GF_METRICS_BASIC_AUTH_PASSWORD=admin
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+
+  postgres:
+    image: postgres:10
+    container_name: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    networks:
+      - monitoring
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-volume:/var/lib/postgresql/data
+
+  client:
+    build: .
+    container_name: mqtt-client
+    restart: always
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+
+volumes:
+  postgres-volume:
+  grafana-volume:
+  influxdb-volume:
